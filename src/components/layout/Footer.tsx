@@ -194,7 +194,7 @@ export default function Footer() {
               style={{ gap: "clamp(0.75rem, 1.5vw, 1.25rem)" }}
             >
               <a
-                href="https://www.facebook.com/profile.php?id=61558871727344"
+                href="https://www.facebook.com/share/1DaXQTRLcB/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[var(--text-secondary)]/60 transition-colors hover:text-[var(--accent-gold)]"
