@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCartStore } from "@/lib/store/cartStore";
-import { processCheckout } from "@/lib/graphql/checkout";
+import {
+  processCheckout,
+  applyManualCoupon,
+} from "@/lib/graphql/checkout";
 import { CheckoutInput } from "@/types/checkout";
 import { cn, extractNumericPrice, calculateDisplayTotals } from "@/lib/utils";
 
@@ -13,6 +16,11 @@ export default function CheckoutForm() {
   const { subtotal: subtotalPrice, discount: promotionDiscount, total: discountedSubtotal } =
     calculateDisplayTotals(items, promotion);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null);
+const [promoMessage, setPromoMessage] = useState<string | null>(null);
+const [promoError, setPromoError] = useState<string | null>(null);
+const [isApplyingPromo, setIsApplyingPromo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{
     orderNumber: string;
