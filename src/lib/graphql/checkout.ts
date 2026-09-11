@@ -1,53 +1,131 @@
-import { CheckoutInput, CartItem } from "@/types/checkout";
-import type { CartPromotion } from "@/lib/store/cartStore";
+import {
+  CheckoutInput,
+  CartItem,
+} from "@/types/checkout";
+
+import type {
+  CartPromotion,
+} from "@/lib/store/cartStore";
 
 export type ManualCouponResult = {
   success: boolean;
+
   code?: string;
+
   message?: string;
+
+  discountAmount?: number;
+
+  subtotal?: number;
+
+  total?: number;
+
+  discountType?: string | null;
+
+  couponAmount?: number;
 };
 
-export async function applyManualCoupon(code: string): Promise<ManualCouponResult> {
-  const cleanCode = code.trim();
+export async function applyManualCoupon(
+  code: string
+): Promise<ManualCouponResult> {
+  const cleanCode =
+    code.trim();
 
   if (!cleanCode) {
     return {
       success: false,
-      message: "Please enter a promo code.",
+
+      message:
+        "Please enter a promo code.",
     };
   }
 
   try {
-    const response = await fetch("/api/checkout", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        action: "apply-coupon",
-        couponCode: cleanCode,
-      }),
-    });
+    const response =
+      await fetch(
+        "/api/checkout",
+        {
+          method: "POST",
 
-    const result = await response.json();
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-    if (!response.ok || !result.success) {
+          body:
+            JSON.stringify({
+              action:
+                "apply-coupon",
+
+              couponCode:
+                cleanCode,
+            }),
+        }
+      );
+
+    const result =
+      await response.json();
+
+    if (
+      !response.ok ||
+      !result.success
+    ) {
       return {
         success: false,
-        message: result.error || result.message || "Invalid promo code.",
+
+        message:
+          result.error ||
+          result.message ||
+          "Invalid promo code.",
       };
     }
 
     return {
       success: true,
-      code: result.code || cleanCode.toUpperCase(),
-      message: result.message || "Promo code applied successfully.",
+
+      code:
+        result.code ||
+        cleanCode.toUpperCase(),
+
+      message:
+        result.message ||
+        "Promo code applied successfully.",
+
+      discountAmount:
+        Number(
+          result.discountAmount || 0
+        ),
+
+      subtotal:
+        Number(
+          result.subtotal || 0
+        ),
+
+      total:
+        Number(
+          result.total || 0
+        ),
+
+      discountType:
+        result.discountType ||
+        null,
+
+      couponAmount:
+        Number(
+          result.couponAmount || 0
+        ),
     };
-  } catch (error: any) {
-    console.error("Promo code error:", error);
+  } catch (
+    error: any
+  ) {
+    console.error(
+      "Promo code error:",
+      error
+    );
 
     return {
       success: false,
+
       message:
         error?.message ||
         "Unable to validate the promo code. Please try again.",
@@ -56,43 +134,89 @@ export async function applyManualCoupon(code: string): Promise<ManualCouponResul
 }
 
 /**
- * Process checkout via Next.js API route.
+ * Process checkout via
+ * Next.js API route.
  */
+
 export async function processCheckout(
   input: CheckoutInput,
+
   cartItems: CartItem[],
-  promotion: CartPromotion | null = null,
-  promoCode: string | null = null
+
+  promotion:
+    | CartPromotion
+    | null = null,
+
+  promoCode:
+    | string
+    | null = null
 ) {
   try {
-    const response = await fetch("/api/checkout", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        action: "checkout",
-        checkoutInput: input,
-        cartItems,
-        promotion,
-        promoCode: promoCode?.trim() || null,
-      }),
-    });
+    const response =
+      await fetch(
+        "/api/checkout",
+        {
+          method:
+            "POST",
 
-    const result = await response.json();
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              action:
+                "checkout",
+
+              checkoutInput:
+                input,
+
+              cartItems,
+
+              promotion,
+
+              promoCode:
+                promoCode?.trim() ||
+                null,
+            }),
+        }
+      );
+
+    const result =
+      await response.json();
 
     if (!response.ok) {
-      console.error("Checkout API error:", result);
-      throw new Error(result.error || result.message || "Checkout failed");
+      console.error(
+        "Checkout API error:",
+        result
+      );
+
+      throw new Error(
+        result.error ||
+        result.message ||
+        "Checkout failed"
+      );
     }
 
-    if (!result.success || !result.checkout) {
-      throw new Error("Checkout failed - invalid response");
+    if (
+      !result.success ||
+      !result.checkout
+    ) {
+      throw new Error(
+        "Checkout failed - invalid response"
+      );
     }
 
     return result.checkout;
-  } catch (error: any) {
-    console.error("Checkout process error:", error);
+  } catch (
+    error: any
+  ) {
+    console.error(
+      "Checkout process error:",
+      error
+    );
+
     throw error;
   }
 }
