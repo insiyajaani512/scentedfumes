@@ -11,25 +11,14 @@ import type {
   GiftSetPromotionCode,
 } from "@/lib/store/cartStore";
 
-/*
- * ---------------------------------------------------------
- * GRAPHQL ENDPOINT
- * ---------------------------------------------------------
- *
- * IMPORTANT:
- *
- * This must point to the WordPress/WooCommerce backend,
- * NOT the Vercel frontend.
- */
-
 const GRAPHQL_ENDPOINT =
-  process.env
-    .NEXT_PUBLIC_WORDPRESS_API_URL ||
+  process.env.NEXT_PUBLIC_WORDPRESS_API_URL ||
+  process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ||
   "https://backend.scentedfumes.com/graphql";
 
 /*
  * ---------------------------------------------------------
- * EMPTY CART MUTATION
+ * EMPTY WOOCOMMERCE CART
  * ---------------------------------------------------------
  */
 
@@ -45,7 +34,7 @@ const EMPTY_CART_MUTATION = `
 
 /*
  * ---------------------------------------------------------
- * ADD TO CART MUTATION
+ * ADD PRODUCT TO CART
  * ---------------------------------------------------------
  */
 
@@ -71,7 +60,7 @@ const ADD_TO_CART_MUTATION = `
 
 /*
  * ---------------------------------------------------------
- * CART TOTALS QUERY
+ * CART TOTALS
  * ---------------------------------------------------------
  */
 
@@ -91,7 +80,7 @@ const CART_TOTALS_QUERY = `
 
 /*
  * ---------------------------------------------------------
- * CHECKOUT MUTATION
+ * CHECKOUT
  * ---------------------------------------------------------
  */
 
@@ -121,6 +110,7 @@ const CHECKOUT_MUTATION = `
       }
 
       result
+
       redirect
     }
   }
@@ -133,19 +123,16 @@ const CHECKOUT_MUTATION = `
  */
 
 type PromotionPayload = {
-  code:
-    GiftSetPromotionCode;
+  code: GiftSetPromotionCode;
 
-  selections:
-    number[];
+  selections: number[];
 
-  label:
-    string;
+  label: string;
 };
 
 /*
  * ---------------------------------------------------------
- * GET PROMOTION COUPON
+ * GET COUPON CODE FOR PROMOTION
  * ---------------------------------------------------------
  */
 
@@ -155,7 +142,9 @@ function getCouponCodeForPromotion(
   const env =
     process.env;
 
-  switch (code) {
+  switch (
+    code
+  ) {
     case "gift_3_eco":
       return (
         env
@@ -197,16 +186,16 @@ function getCouponCodeForPromotion(
 
 function validatePromotionPayload(
   promotion: PromotionPayload,
-  cartItems: Array<{
-    productId:
-      number;
 
-    quantity:
-      number;
+  cartItems: Array<{
+    productId: number;
+
+    quantity: number;
   }>
 ) {
   const selectionIds =
-    promotion.selections ?? [];
+    promotion.selections ??
+    [];
 
   const uniqueSelectionCount =
     new Set(
@@ -218,8 +207,7 @@ function validatePromotionPayload(
     selectionIds.length
   ) {
     return {
-      ok:
-        false,
+      ok: false,
 
       message:
         "Invalid promotion selection (duplicate items).",
@@ -237,14 +225,16 @@ function validatePromotionPayload(
     );
 
   for (
-    const id of selectionIds
+    const id of
+    selectionIds
   ) {
     if (
-      !cartIdSet.has(id)
+      !cartIdSet.has(
+        id
+      )
     ) {
       return {
-        ok:
-          false,
+        ok: false,
 
         message:
           "Invalid promotion selection (items do not match cart).",
@@ -257,13 +247,13 @@ function validatePromotionPayload(
     "gift_3_eco"
       ? 3
       : promotion.code ===
-        "gift_3_pro"
+          "gift_3_pro"
         ? 3
         : promotion.code ===
-          "pro_half_eco"
+            "pro_half_eco"
           ? 2
           : promotion.code ===
-            "pro_half_testers"
+              "pro_half_testers"
             ? 2
             : 0;
 
@@ -272,8 +262,7 @@ function validatePromotionPayload(
     expectedSelectionCount
   ) {
     return {
-      ok:
-        false,
+      ok: false,
 
       message:
         "Invalid promotion selection (wrong number of items).",
@@ -294,18 +283,19 @@ function validatePromotionPayload(
 
 async function graphqlRequest(
   query: string,
-  variables: any = {},
-  sessionToken?: string
+
+  variables:
+    any =
+      {},
+
+  sessionToken?:
+    string
 ) {
   const headers:
     HeadersInit = {
       "Content-Type":
         "application/json",
     };
-
-  /*
-   * Send WooCommerce session.
-   */
 
   if (
     sessionToken
@@ -326,26 +316,21 @@ async function graphqlRequest(
         headers,
 
         body:
-          JSON.stringify({
-            query,
-            variables,
-          }),
+          JSON.stringify(
+            {
+              query,
+
+              variables,
+            }
+          ),
 
         credentials:
           "include",
-
-        cache:
-          "no-store",
       }
     );
 
   const result =
     await response.json();
-
-  /*
-   * Get WooCommerce session
-   * returned by backend.
-   */
 
   const newSessionToken =
     response.headers.get(
@@ -368,17 +353,22 @@ async function graphqlRequest(
  */
 
 function parseWooCommerceAmount(
-  value: any
+  value:
+    any
 ): number {
   if (
-    value === null ||
-    value === undefined
+    value ===
+      null ||
+    value ===
+      undefined
   ) {
     return 0;
   }
 
   const cleaned =
-    String(value)
+    String(
+      value
+    )
       .replace(
         /[^0-9.-]/g,
         ""
@@ -386,7 +376,9 @@ function parseWooCommerceAmount(
       .trim();
 
   const amount =
-    Number(cleaned);
+    Number(
+      cleaned
+    );
 
   return Number.isFinite(
     amount
@@ -397,12 +389,16 @@ function parseWooCommerceAmount(
 
 /*
  * ---------------------------------------------------------
- * APPLY MANUAL COUPON
+ * MANUAL COUPON
  * ---------------------------------------------------------
+ *
+ * Apply coupon and return
+ * discountAmount for CheckoutForm.
  */
 
 async function handleManualCoupon(
-  couponCode: string
+  couponCode:
+    string
 ) {
   const cleanCode =
     couponCode.trim();
@@ -426,7 +422,7 @@ async function handleManualCoupon(
   }
 
   /*
-   * Apply coupon.
+   * APPLY COUPON
    */
 
   const applyResult =
@@ -438,13 +434,9 @@ async function handleManualCoupon(
       }
     );
 
-  /*
-   * Check GraphQL errors.
-   */
-
   if (
     applyResult.data
-      ?.errors
+      .errors
   ) {
     console.error(
       "Manual coupon errors:",
@@ -457,9 +449,11 @@ async function handleManualCoupon(
         .errors
         .map(
           (
-            error: any
+            error:
+              any
           ) =>
-            error?.message
+            error
+              ?.message
         )
         .filter(
           Boolean
@@ -485,7 +479,7 @@ async function handleManualCoupon(
   }
 
   /*
-   * Verify coupon was applied.
+   * VERIFY COUPON
    */
 
   const appliedCoupons =
@@ -499,13 +493,17 @@ async function handleManualCoupon(
   const applied =
     appliedCoupons.some(
       (
-        coupon: any
+        coupon:
+          any
       ) =>
         String(
-          coupon?.code ||
-          ""
-        ).toLowerCase() ===
-        cleanCode.toLowerCase()
+          coupon
+            ?.code ||
+            ""
+        )
+          .toLowerCase() ===
+        cleanCode
+          .toLowerCase()
     );
 
   if (
@@ -527,39 +525,39 @@ async function handleManualCoupon(
   }
 
   /*
-   * ---------------------------------------------------------
-   * FETCH UPDATED TOTALS
-   * ---------------------------------------------------------
+   * FETCH UPDATED CART TOTALS
    */
 
   const cartTotalsResult =
     await graphqlRequest(
       CART_TOTALS_QUERY,
       {},
-      applyResult.sessionToken ??
+
+      applyResult
+        .sessionToken ??
         undefined
     );
 
   if (
-    cartTotalsResult.data
-      ?.errors
+    cartTotalsResult
+      .data
+      .errors
   ) {
     console.error(
       "Cart totals errors:",
-      cartTotalsResult.data
+      cartTotalsResult
+        .data
         .errors
     );
   }
 
-  /*
-   * Get updated cart.
-   */
-
   const cart =
-    cartTotalsResult.data
+    cartTotalsResult
+      .data
       ?.data
       ?.cart ||
-    applyResult.data
+    applyResult
+      .data
       ?.data
       ?.applyCoupon
       ?.cart ||
@@ -567,69 +565,69 @@ async function handleManualCoupon(
 
   const subtotal =
     parseWooCommerceAmount(
-      cart?.subtotal
+      cart
+        ?.subtotal
     );
 
   const discount =
     parseWooCommerceAmount(
-      cart?.discountTotal
+      cart
+        ?.discountTotal
     );
 
   const total =
     parseWooCommerceAmount(
-      cart?.total
+      cart
+        ?.total
     );
 
   /*
    * ---------------------------------------------------------
-   * RETURN RESULTS
+   * IMPORTANT FIX
    * ---------------------------------------------------------
    *
-   * IMPORTANT:
-   *
-   * CheckoutForm expects:
+   * Frontend CheckoutForm expects:
    *
    * result.discountAmount
    *
-   * Therefore this exact property
-   * MUST be returned.
+   * Therefore we explicitly return it.
    */
 
-  return NextResponse.json({
-    success:
-      true,
+  return NextResponse.json(
+    {
+      success:
+        true,
 
-    code:
-      cleanCode.toUpperCase(),
+      code:
+        cleanCode
+          .toUpperCase(),
 
-    message:
-      "Promo code applied successfully.",
+      message:
+        "Promo code applied successfully.",
 
-    /*
-     * IMPORTANT FIX
-     */
+      /*
+       * THIS IS THE FIX
+       */
 
-    discountAmount:
-      discount,
+      discountAmount:
+        discount,
 
-    /*
-     * Extra values.
-     */
-
-    subtotal,
-
-    discount,
-
-    total,
-
-    totals: {
       subtotal,
 
       discount,
 
       total,
-    },
-  });
+
+      totals:
+        {
+          subtotal,
+
+          discount,
+
+          total,
+        },
+    }
+  );
 }
 
 /*
@@ -639,14 +637,16 @@ async function handleManualCoupon(
  */
 
 export async function POST(
-  request: NextRequest
+  request:
+    NextRequest
 ) {
   try {
     const body =
       await request.json();
 
     const action =
-      body?.action ||
+      body
+        ?.action ||
       "checkout";
 
     /*
@@ -661,8 +661,9 @@ export async function POST(
     ) {
       return await handleManualCoupon(
         String(
-          body?.couponCode ||
-          ""
+          body
+            ?.couponCode ||
+            ""
         )
       );
     }
@@ -675,8 +676,11 @@ export async function POST(
 
     const {
       checkoutInput,
+
       cartItems,
+
       promotion,
+
       promoCode,
     } =
       body as {
@@ -702,7 +706,7 @@ export async function POST(
       };
 
     /*
-     * Validate cart.
+     * VALIDATE CART
      */
 
     if (
@@ -739,28 +743,35 @@ export async function POST(
       await graphqlRequest(
         EMPTY_CART_MUTATION,
         {},
+
         sessionToken
       );
 
     if (
-      emptyResult.sessionToken
+      emptyResult
+        .sessionToken
     ) {
       sessionToken =
-        emptyResult.sessionToken;
+        emptyResult
+          .sessionToken;
     }
 
     if (
-      emptyResult.data
-        ?.errors
+      emptyResult
+        .data
+        .errors
     ) {
       const isEmptyError =
-        emptyResult.data
+        emptyResult
+          .data
           .errors
           .some(
             (
-              error: any
+              error:
+                any
             ) =>
-              error.message
+              error
+                .message
                 ?.toLowerCase()
                 .includes(
                   "cart is empty"
@@ -772,7 +783,8 @@ export async function POST(
       ) {
         console.error(
           "Empty cart errors:",
-          emptyResult.data
+          emptyResult
+            .data
             .errors
         );
       }
@@ -781,12 +793,13 @@ export async function POST(
     /*
      * ---------------------------------------------------------
      * STEP 2:
-     * ADD CART PRODUCTS
+     * ADD PRODUCTS
      * ---------------------------------------------------------
      */
 
     for (
-      const item of cartItems
+      const item of
+      cartItems
     ) {
       if (
         !item.productId ||
@@ -818,23 +831,28 @@ export async function POST(
             quantity:
               item.quantity,
           },
+
           sessionToken
         );
 
       if (
-        addResult.sessionToken
+        addResult
+          .sessionToken
       ) {
         sessionToken =
-          addResult.sessionToken;
+          addResult
+            .sessionToken;
       }
 
       if (
-        addResult.data
-          ?.errors
+        addResult
+          .data
+          .errors
       ) {
         console.error(
           "Add to cart errors:",
-          addResult.data
+          addResult
+            .data
             .errors
         );
 
@@ -844,7 +862,8 @@ export async function POST(
               `Failed to add product ${item.productId}.`,
 
             details:
-              addResult.data
+              addResult
+                .data
                 .errors,
           },
           {
@@ -868,6 +887,7 @@ export async function POST(
       const validation =
         validatePromotionPayload(
           promotion,
+
           cartItems
         );
 
@@ -877,7 +897,8 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              validation.message,
+              validation
+                .message,
           },
           {
             status:
@@ -888,7 +909,8 @@ export async function POST(
 
       const couponCode =
         getCouponCodeForPromotion(
-          promotion.code
+          promotion
+            .code
         );
 
       let systemNote =
@@ -911,23 +933,28 @@ export async function POST(
               code:
                 couponCode,
             },
+
             sessionToken
           );
 
         if (
-          applyResult.sessionToken
+          applyResult
+            .sessionToken
         ) {
           sessionToken =
-            applyResult.sessionToken;
+            applyResult
+              .sessionToken;
         }
 
         if (
-          applyResult.data
-            ?.errors
+          applyResult
+            .data
+            .errors
         ) {
           console.error(
             "Promotion coupon errors:",
-            applyResult.data
+            applyResult
+              .data
               .errors
           );
 
@@ -954,10 +981,12 @@ export async function POST(
 
     if (
       promoCode &&
-      promoCode.trim()
+      promoCode
+        .trim()
     ) {
       const cleanPromoCode =
-        promoCode.trim();
+        promoCode
+          .trim();
 
       const applyResult =
         await graphqlRequest(
@@ -966,36 +995,44 @@ export async function POST(
             code:
               cleanPromoCode,
           },
+
           sessionToken
         );
 
       if (
-        applyResult.sessionToken
+        applyResult
+          .sessionToken
       ) {
         sessionToken =
-          applyResult.sessionToken;
+          applyResult
+            .sessionToken;
       }
 
       if (
-        applyResult.data
-          ?.errors
+        applyResult
+          .data
+          .errors
       ) {
         console.error(
           "Manual promo coupon errors:",
-          applyResult.data
+          applyResult
+            .data
             .errors
         );
 
         return NextResponse.json(
           {
             error:
-              applyResult.data
+              applyResult
+                .data
                 .errors
                 .map(
                   (
-                    error: any
+                    error:
+                      any
                   ) =>
-                    error?.message
+                    error
+                      ?.message
                 )
                 .filter(
                   Boolean
@@ -1012,12 +1049,9 @@ export async function POST(
         );
       }
 
-      /*
-       * Verify manual coupon.
-       */
-
       const appliedCoupons =
-        applyResult.data
+        applyResult
+          .data
           ?.data
           ?.applyCoupon
           ?.cart
@@ -1027,13 +1061,17 @@ export async function POST(
       const applied =
         appliedCoupons.some(
           (
-            coupon: any
+            coupon:
+              any
           ) =>
             String(
-              coupon?.code ||
-              ""
-            ).toLowerCase() ===
-            cleanPromoCode.toLowerCase()
+              coupon
+                ?.code ||
+                ""
+            )
+              .toLowerCase() ===
+            cleanPromoCode
+              .toLowerCase()
         );
 
       if (
@@ -1047,6 +1085,7 @@ export async function POST(
           {
             status:
               400,
+            }
           }
         );
       }
@@ -1092,20 +1131,19 @@ export async function POST(
               .customerNote ||
             null,
         },
+
         sessionToken
       );
 
-    /*
-     * Check checkout errors.
-     */
-
     if (
-      checkoutResult.data
-        ?.errors
+      checkoutResult
+        .data
+        .errors
     ) {
       console.error(
         "Checkout errors:",
-        checkoutResult.data
+        checkoutResult
+          .data
           .errors
       );
 
@@ -1115,7 +1153,8 @@ export async function POST(
             "Checkout failed.",
 
           details:
-            checkoutResult.data
+            checkoutResult
+              .data
               .errors,
         },
         {
@@ -1125,13 +1164,10 @@ export async function POST(
       );
     }
 
-    /*
-     * Check checkout response.
-     */
-
     if (
-      !checkoutResult.data
-        ?.data
+      !checkoutResult
+        .data
+        .data
         ?.checkout
     ) {
       return NextResponse.json(
@@ -1146,23 +1182,21 @@ export async function POST(
       );
     }
 
-    /*
-     * ---------------------------------------------------------
-     * SUCCESS
-     * ---------------------------------------------------------
-     */
+    return NextResponse.json(
+      {
+        success:
+          true,
 
-    return NextResponse.json({
-      success:
-        true,
-
-      checkout:
-        checkoutResult.data
-          .data
-          .checkout,
-    });
+        checkout:
+          checkoutResult
+            .data
+            .data
+            .checkout,
+      }
+    );
   } catch (
-    error: any
+    error:
+      any
   ) {
     console.error(
       "API checkout error:",
@@ -1175,7 +1209,8 @@ export async function POST(
           "Checkout processing failed.",
 
         message:
-          error?.message,
+          error
+            ?.message,
       },
       {
         status:
