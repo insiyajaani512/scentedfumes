@@ -9,7 +9,7 @@ import type {
 
 /*
  * ---------------------------------------------------------
- * TYPES
+ * MANUAL COUPON RESULT
  * ---------------------------------------------------------
  */
 
@@ -20,14 +20,8 @@ export type ManualCouponResult = {
 
   message?: string;
 
-  /*
-   * Actual calculated discount in PKR
-   */
   discountAmount?: number;
 
-  /*
-   * Fallback discount field
-   */
   discount?: number;
 
   subtotal?: number;
@@ -41,33 +35,25 @@ export type ManualCouponResult = {
 
 /*
  * ---------------------------------------------------------
- * HELPER
- * ---------------------------------------------------------
- *
- * Convert any API value safely into a number.
- */
-
-function toNumber(
-  value: unknown
-): number {
-  const numberValue =
-    Number(value);
-
-  return Number.isFinite(
-    numberValue
-  )
-    ? numberValue
-    : 0;
-}
-
-/*
- * ---------------------------------------------------------
  * APPLY MANUAL COUPON
  * ---------------------------------------------------------
+ *
+ * IMPORTANT:
+ *
+ * We send the actual frontend cart items to the API.
+ *
+ * The API creates a temporary WooCommerce cart,
+ * adds these items, applies the coupon,
+ * and returns the REAL WooCommerce discount.
  */
 
 export async function applyManualCoupon(
-  code: string
+  code: string,
+
+  cartItems: Array<{
+    productId: number;
+    quantity: number;
+  }>
 ): Promise<ManualCouponResult> {
   const cleanCode =
     code.trim();
@@ -75,9 +61,21 @@ export async function applyManualCoupon(
   if (!cleanCode) {
     return {
       success: false,
-
       message:
         "Please enter a promo code.",
+    };
+  }
+
+  if (
+    !Array.isArray(
+      cartItems
+    ) ||
+    cartItems.length === 0
+  ) {
+    return {
+      success: false,
+      message:
+        "Your cart is empty.",
     };
   }
 
@@ -101,79 +99,39 @@ export async function applyManualCoupon(
 
               couponCode:
                 cleanCode,
+
+              cartItems,
             }),
         }
       );
 
-    let result: any;
-
-    try {
-      result =
-        await response.json();
-    } catch {
-      throw new Error(
-        "Invalid response from server."
-      );
-    }
+    const result =
+      await response.json();
 
     if (
       !response.ok ||
-      !result?.success
+      !result.success
     ) {
       return {
         success: false,
 
         message:
-          result?.error ||
-          result?.message ||
+          result.error ||
+          result.message ||
           "Invalid promo code.",
       };
     }
 
     /*
-     * -----------------------------------------------------
-     * GET ACTUAL DISCOUNT
-     * -----------------------------------------------------
-     *
-     * Support multiple possible API response formats.
+     * WooCommerce returns the real discount.
      */
 
     const actualDiscount =
-      toNumber(
+      Number(
         result.discountAmount ??
-          result.discount ??
-          result.totals?.discount ??
-          result.totals?.discountAmount ??
-          result.cart?.discount ??
-          0
-      );
-
-    /*
-     * -----------------------------------------------------
-     * GET SUBTOTAL
-     * -----------------------------------------------------
-     */
-
-    const subtotal =
-      toNumber(
-        result.subtotal ??
-          result.totals?.subtotal ??
-          result.cart?.subtotal ??
-          0
-      );
-
-    /*
-     * -----------------------------------------------------
-     * GET TOTAL
-     * -----------------------------------------------------
-     */
-
-    const total =
-      toNumber(
-        result.total ??
-          result.totals?.total ??
-          result.cart?.total ??
-          0
+        result.discount ??
+        result.totals?.discount ??
+        0
       );
 
     return {
@@ -181,43 +139,40 @@ export async function applyManualCoupon(
 
       code:
         result.code ||
-        result.couponCode ||
         cleanCode.toUpperCase(),
 
       message:
         result.message ||
         "Promo code applied successfully.",
 
-      /*
-       * IMPORTANT
-       *
-       * CheckoutForm reads discountAmount.
-       */
-
       discountAmount:
         actualDiscount,
-
-      /*
-       * Keep duplicate fallback.
-       */
 
       discount:
         actualDiscount,
 
-      subtotal,
+      subtotal:
+        Number(
+          result.subtotal ??
+          result.totals?.subtotal ??
+          0
+        ),
 
-      total,
+      total:
+        Number(
+          result.total ??
+          result.totals?.total ??
+          0
+        ),
 
       discountType:
-        result.discountType ??
-        result.coupon?.discountType ??
+        result.discountType ||
         null,
 
       couponAmount:
-        toNumber(
-          result.couponAmount ??
-            result.coupon?.amount ??
-            0
+        Number(
+          result.couponAmount ||
+          0
         ),
     };
   } catch (
@@ -251,11 +206,13 @@ export async function processCheckout(
 
   promotion:
     | CartPromotion
-    | null = null,
+    | null =
+      null,
 
   promoCode:
     | string
-    | null = null
+    | null =
+      null
 ) {
   try {
     const response =
@@ -289,43 +246,32 @@ export async function processCheckout(
         }
       );
 
-    let result: any;
+    const result =
+      await response.json();
 
-    try {
-      result =
-        await response.json();
-    } catch {
-      throw new Error(
-        "Invalid response from checkout server."
-      );
-    }
-
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       console.error(
         "Checkout API error:",
         result
       );
 
       throw new Error(
-        result?.error ||
-          result?.message ||
-          "Checkout failed"
+        result.error ||
+        result.message ||
+        "Checkout failed"
       );
     }
 
     if (
-      !result?.success ||
-      !result?.checkout
+      !result.success ||
+      !result.checkout
     ) {
-      console.error(
-        "Invalid checkout response:",
-        result
-      );
-
       throw new Error(
-        result?.error ||
-          result?.message ||
-          "Checkout failed - invalid response"
+        result.error ||
+        result.message ||
+        "Checkout failed - invalid response"
       );
     }
 
