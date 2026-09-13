@@ -5,19 +5,18 @@ import {
 } from "urql";
 
 /*
- * WordPress / WooCommerce GraphQL endpoint.
+ * ---------------------------------------------------------
+ * GRAPHQL ENDPOINT
+ * ---------------------------------------------------------
  *
- * Priority:
- * 1. Vercel environment variable
- * 2. Alternative environment variable
- * 3. Backend fallback URL
+ * IMPORTANT:
+ * The default must be the WordPress/WooCommerce backend,
+ * NOT the frontend Vercel website.
  */
 
 const graphqlEndpoint =
-  process.env
-    .NEXT_PUBLIC_WORDPRESS_API_URL ??
-  process.env
-    .NEXT_PUBLIC_GRAPHQL_ENDPOINT ??
+  process.env.NEXT_PUBLIC_WORDPRESS_API_URL ||
+  process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT ||
   "https://backend.scentedfumes.com/graphql";
 
 const isServer =
@@ -25,13 +24,18 @@ const isServer =
 
 /*
  * ---------------------------------------------------------
- * WOOCOMMERCE SESSION
+ * WOOCOMMERCE SESSION TOKEN
  * ---------------------------------------------------------
  */
 
 function getSessionToken():
   | string
   | null {
+  /*
+   * localStorage does not exist
+   * during server-side rendering.
+   */
+
   if (isServer) {
     return null;
   }
@@ -41,9 +45,13 @@ function getSessionToken():
   );
 }
 
-function setSessionToken(
+export function setSessionToken(
   token: string
 ) {
+  /*
+   * Do nothing on the server.
+   */
+
   if (isServer) {
     return;
   }
@@ -62,36 +70,48 @@ function setSessionToken(
 
 export const graphqlClient =
   createClient({
-    url:
-      graphqlEndpoint,
+    url: graphqlEndpoint,
+
+    /*
+     * Always fetch fresh data during
+     * server-side rendering/build.
+     */
 
     requestPolicy:
       isServer
         ? "network-only"
         : "cache-first",
 
-    fetchOptions:
-      () => {
-        const sessionToken =
-          getSessionToken();
+    /*
+     * WooCommerce session handling.
+     */
 
-        return {
-          credentials:
-            "include",
+    fetchOptions: () => {
+      const sessionToken =
+        getSessionToken();
 
-          headers: {
-            "content-type":
-              "application/json",
+      return {
+        credentials:
+          "include",
 
-            ...(sessionToken
-              ? {
-                  "woocommerce-session":
-                    `Session ${sessionToken}`,
-                }
-              : {}),
-          },
-        };
-      },
+        headers: {
+          "content-type":
+            "application/json",
+
+          ...(sessionToken
+            ? {
+                "woocommerce-session":
+                  `Session ${sessionToken}`,
+              }
+            : {}),
+        },
+      };
+    },
+
+    /*
+     * Server uses fetch directly.
+     * Browser uses cache + fetch.
+     */
 
     exchanges:
       isServer
@@ -103,12 +123,3 @@ export const graphqlClient =
             fetchExchange,
           ],
   });
-
-/*
- * Export session setter
- * for WooCommerce cart/session handling.
- */
-
-export {
-  setSessionToken,
-};
