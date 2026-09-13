@@ -7,33 +7,67 @@ import type {
   CartPromotion,
 } from "@/lib/store/cartStore";
 
+/*
+ * ---------------------------------------------------------
+ * MANUAL COUPON RESULT
+ * ---------------------------------------------------------
+ */
+
 export type ManualCouponResult = {
-  success: boolean;
+  success:
+    boolean;
 
-  code?: string;
+  code?:
+    string;
 
-  message?: string;
+  message?:
+    string;
 
-  discountAmount?: number;
+  discountAmount?:
+    number;
 
-  subtotal?: number;
+  /*
+   * Keep this as fallback because
+   * the API may also return "discount".
+   */
 
-  total?: number;
+  discount?:
+    number;
 
-  discountType?: string | null;
+  subtotal?:
+    number;
 
-  couponAmount?: number;
+  total?:
+    number;
+
+  discountType?:
+    string | null;
+
+  couponAmount?:
+    number;
 };
 
+/*
+ * ---------------------------------------------------------
+ * APPLY MANUAL COUPON
+ * ---------------------------------------------------------
+ */
+
 export async function applyManualCoupon(
-  code: string
-): Promise<ManualCouponResult> {
+  code:
+    string
+): Promise<
+  ManualCouponResult
+> {
   const cleanCode =
     code.trim();
 
-  if (!cleanCode) {
+  if (
+    !cleanCode
+  ) {
     return {
-      success: false,
+      success:
+        false,
 
       message:
         "Please enter a promo code.",
@@ -45,21 +79,25 @@ export async function applyManualCoupon(
       await fetch(
         "/api/checkout",
         {
-          method: "POST",
+          method:
+            "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+          headers:
+            {
+              "Content-Type":
+                "application/json",
+            },
 
           body:
-            JSON.stringify({
-              action:
-                "apply-coupon",
+            JSON.stringify(
+              {
+                action:
+                  "apply-coupon",
 
-              couponCode:
-                cleanCode,
-            }),
+                couponCode:
+                  cleanCode,
+              }
+            ),
         }
       );
 
@@ -71,7 +109,8 @@ export async function applyManualCoupon(
       !result.success
     ) {
       return {
-        success: false,
+        success:
+          false,
 
         message:
           result.error ||
@@ -80,30 +119,67 @@ export async function applyManualCoupon(
       };
     }
 
+    /*
+     * -----------------------------------------------------
+     * IMPORTANT FIX
+     * -----------------------------------------------------
+     *
+     * Prefer:
+     *
+     * result.discountAmount
+     *
+     * But also support:
+     *
+     * result.discount
+     *
+     * This ensures the checkout page always
+     * receives the correct discount.
+     */
+
+    const actualDiscount =
+      Number(
+        result.discountAmount ??
+        result.discount ??
+        result.totals?.discount ??
+        0
+      );
+
     return {
-      success: true,
+      success:
+        true,
 
       code:
         result.code ||
-        cleanCode.toUpperCase(),
+        cleanCode
+          .toUpperCase(),
 
       message:
         result.message ||
         "Promo code applied successfully.",
 
+      /*
+       * IMPORTANT:
+       * This is what CheckoutForm uses.
+       */
+
       discountAmount:
-        Number(
-          result.discountAmount || 0
-        ),
+        actualDiscount,
+
+      discount:
+        actualDiscount,
 
       subtotal:
         Number(
-          result.subtotal || 0
+          result.subtotal ??
+          result.totals?.subtotal ??
+          0
         ),
 
       total:
         Number(
-          result.total || 0
+          result.total ??
+          result.totals?.total ??
+          0
         ),
 
       discountType:
@@ -112,11 +188,13 @@ export async function applyManualCoupon(
 
       couponAmount:
         Number(
-          result.couponAmount || 0
+          result.couponAmount ||
+          0
         ),
     };
   } catch (
-    error: any
+    error:
+      any
   ) {
     console.error(
       "Promo code error:",
@@ -124,32 +202,39 @@ export async function applyManualCoupon(
     );
 
     return {
-      success: false,
+      success:
+        false,
 
       message:
-        error?.message ||
+        error
+          ?.message ||
         "Unable to validate the promo code. Please try again.",
     };
   }
 }
 
-/**
- * Process checkout via
- * Next.js API route.
+/*
+ * ---------------------------------------------------------
+ * PROCESS CHECKOUT
+ * ---------------------------------------------------------
  */
 
 export async function processCheckout(
-  input: CheckoutInput,
+  input:
+    CheckoutInput,
 
-  cartItems: CartItem[],
+  cartItems:
+    CartItem[],
 
   promotion:
     | CartPromotion
-    | null = null,
+    | null =
+      null,
 
   promoCode:
     | string
-    | null = null
+    | null =
+      null
 ) {
   try {
     const response =
@@ -159,34 +244,40 @@ export async function processCheckout(
           method:
             "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+          headers:
+            {
+              "Content-Type":
+                "application/json",
+            },
 
           body:
-            JSON.stringify({
-              action:
-                "checkout",
+            JSON.stringify(
+              {
+                action:
+                  "checkout",
 
-              checkoutInput:
-                input,
+                checkoutInput:
+                  input,
 
-              cartItems,
+                cartItems,
 
-              promotion,
+                promotion,
 
-              promoCode:
-                promoCode?.trim() ||
-                null,
-            }),
+                promoCode:
+                  promoCode
+                    ?.trim() ||
+                  null,
+              }
+            ),
         }
       );
 
     const result =
       await response.json();
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       console.error(
         "Checkout API error:",
         result
@@ -204,13 +295,16 @@ export async function processCheckout(
       !result.checkout
     ) {
       throw new Error(
+        result.error ||
+        result.message ||
         "Checkout failed - invalid response"
       );
     }
 
     return result.checkout;
   } catch (
-    error: any
+    error:
+      any
   ) {
     console.error(
       "Checkout process error:",
