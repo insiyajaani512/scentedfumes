@@ -7,122 +7,64 @@ import type {
   CartPromotion,
 } from "@/lib/store/cartStore";
 
+/*
+ * ---------------------------------------------------------
+ * MANUAL COUPON RESULT
+ * ---------------------------------------------------------
+ */
+
 export type ManualCouponResult = {
   success: boolean;
-
   code?: string;
-
   message?: string;
-
   discountAmount?: number;
-
   discount?: number;
-
   subtotal?: number;
-
   total?: number;
+  discountType?: string | null;
+  couponAmount?: number;
 };
 
 /*
  * ---------------------------------------------------------
  * APPLY MANUAL COUPON
  * ---------------------------------------------------------
- *
- * IMPORTANT:
- *
- * We send the ACTUAL CART ITEMS to the API.
- *
- * The API rebuilds the WooCommerce cart first,
- * then applies the coupon,
- * then returns the REAL WooCommerce discount.
  */
 
 export async function applyManualCoupon(
-  code: string,
-
-  cartItems: CartItem[]
+  code: string
 ): Promise<ManualCouponResult> {
-  const cleanCode =
-    code.trim();
+  const cleanCode = code.trim();
 
   if (!cleanCode) {
     return {
       success: false,
-
-      message:
-        "Please enter a promo code.",
-    };
-  }
-
-  if (
-    !Array.isArray(
-      cartItems
-    ) ||
-    cartItems.length === 0
-  ) {
-    return {
-      success: false,
-
-      message:
-        "Your cart is empty.",
+      message: "Please enter a promo code.",
     };
   }
 
   try {
-    const response =
-      await fetch(
-        "/api/checkout",
-        {
-          method:
-            "POST",
+    const response = await fetch(
+      "/api/checkout",
+      {
+        method: "POST",
 
-          headers:
-            {
-              "Content-Type":
-                "application/json",
-            },
+        headers: {
+          "Content-Type": "application/json",
+        },
 
-          body:
-            JSON.stringify(
-              {
-                action:
-                  "apply-coupon",
+        body: JSON.stringify({
+          action: "apply-coupon",
+          couponCode: cleanCode,
+        }),
+      }
+    );
 
-                couponCode:
-                  cleanCode,
+    const result = await response.json();
 
-                /*
-                 * Send actual cart items
-                 */
-
-                cartItems:
-                  cartItems.map(
-                    (
-                      item
-                    ) => ({
-                      productId:
-                        item.databaseId,
-
-                      quantity:
-                        item.quantity,
-                    })
-                  ),
-              }
-            ),
-          }
-        }
-      );
-
-    const result =
-      await response.json();
-
-    if (
-      !response.ok ||
-      !result.success
-    ) {
+    if (!response.ok || !result.success) {
       return {
-        success:
-          false,
+        success: false,
 
         message:
           result.error ||
@@ -131,17 +73,15 @@ export async function applyManualCoupon(
       };
     }
 
-    const actualDiscount =
-      Number(
-        result.discountAmount ??
-        result.discount ??
-        result.totals?.discount ??
-        0
-      );
+    const actualDiscount = Number(
+      result.discountAmount ??
+      result.discount ??
+      result.totals?.discount ??
+      0
+    );
 
     return {
-      success:
-        true,
+      success: true,
 
       code:
         result.code ||
@@ -151,41 +91,39 @@ export async function applyManualCoupon(
         result.message ||
         "Promo code applied successfully.",
 
-      /*
-       * This value is used by Checkout.tsx
-       */
+      discountAmount: actualDiscount,
 
-      discountAmount:
-        actualDiscount,
+      discount: actualDiscount,
 
-      discount:
-        actualDiscount,
+      subtotal: Number(
+        result.subtotal ??
+        result.totals?.subtotal ??
+        0
+      ),
 
-      subtotal:
-        Number(
-          result.subtotal ??
-          result.totals?.subtotal ??
-          0
-        ),
+      total: Number(
+        result.total ??
+        result.totals?.total ??
+        0
+      ),
 
-      total:
-        Number(
-          result.total ??
-          result.totals?.total ??
-          0
-        ),
+      discountType:
+        result.discountType ||
+        null,
+
+      couponAmount: Number(
+        result.couponAmount ||
+        0
+      ),
     };
-  } catch (
-    error: any
-  ) {
+  } catch (error: any) {
     console.error(
       "Promo code error:",
       error
     );
 
     return {
-      success:
-        false,
+      success: false,
 
       message:
         error?.message ||
@@ -201,65 +139,49 @@ export async function applyManualCoupon(
  */
 
 export async function processCheckout(
-  input:
-    CheckoutInput,
+  input: CheckoutInput,
 
-  cartItems:
-    CartItem[],
+  cartItems: CartItem[],
 
   promotion:
     | CartPromotion
-    | null =
-      null,
+    | null = null,
 
   promoCode:
     | string
-    | null =
-      null
+    | null = null
 ) {
   try {
-    const response =
-      await fetch(
-        "/api/checkout",
-        {
-          method:
-            "POST",
+    const response = await fetch(
+      "/api/checkout",
+      {
+        method: "POST",
 
-          headers:
-            {
-              "Content-Type":
-                "application/json",
-            },
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
 
-          body:
-            JSON.stringify(
-              {
-                action:
-                  "checkout",
+        body: JSON.stringify({
+          action: "checkout",
 
-                checkoutInput:
-                  input,
+          checkoutInput: input,
 
-                cartItems,
+          cartItems,
 
-                promotion,
+          promotion,
 
-                promoCode:
-                  promoCode
-                    ?.trim() ||
-                  null,
-              }
-            ),
-          }
-        }
-      );
+          promoCode:
+            promoCode?.trim() ||
+            null,
+        }),
+      }
+    );
 
     const result =
       await response.json();
 
-    if (
-      !response.ok
-    ) {
+    if (!response.ok) {
       console.error(
         "Checkout API error:",
         result
@@ -284,9 +206,7 @@ export async function processCheckout(
     }
 
     return result.checkout;
-  } catch (
-    error: any
-  ) {
+  } catch (error: any) {
     console.error(
       "Checkout process error:",
       error
