@@ -17,9 +17,9 @@ const GRAPHQL_ENDPOINT =
   "https://backend.scentedfumes.com/graphql";
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * EMPTY WOOCOMMERCE CART
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 const EMPTY_CART_MUTATION = `
@@ -33,9 +33,9 @@ const EMPTY_CART_MUTATION = `
 `;
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * ADD PRODUCT TO CART
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 const ADD_TO_CART_MUTATION = `
@@ -59,9 +59,9 @@ const ADD_TO_CART_MUTATION = `
 `;
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * CART TOTALS
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 const CART_TOTALS_QUERY = `
@@ -79,9 +79,9 @@ const CART_TOTALS_QUERY = `
 `;
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * CHECKOUT
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 const CHECKOUT_MUTATION = `
@@ -117,27 +117,39 @@ const CHECKOUT_MUTATION = `
 `;
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * TYPES
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 type PromotionPayload = {
-  code: GiftSetPromotionCode;
+  code:
+    GiftSetPromotionCode;
 
-  selections: number[];
+  selections:
+    number[];
 
-  label: string;
+  label:
+    string;
+};
+
+type SimpleCartItem = {
+  productId:
+    number;
+
+  quantity:
+    number;
 };
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * GET COUPON CODE FOR PROMOTION
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 function getCouponCodeForPromotion(
-  code: GiftSetPromotionCode
+  code:
+    GiftSetPromotionCode
 ): string | null {
   const env =
     process.env;
@@ -179,19 +191,17 @@ function getCouponCodeForPromotion(
 }
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * VALIDATE PROMOTION
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 function validatePromotionPayload(
-  promotion: PromotionPayload,
+  promotion:
+    PromotionPayload,
 
-  cartItems: Array<{
-    productId: number;
-
-    quantity: number;
-  }>
+  cartItems:
+    SimpleCartItem[]
 ) {
   const selectionIds =
     promotion.selections ??
@@ -207,7 +217,8 @@ function validatePromotionPayload(
     selectionIds.length
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       message:
         "Invalid promotion selection (duplicate items).",
@@ -234,7 +245,8 @@ function validatePromotionPayload(
       )
     ) {
       return {
-        ok: false,
+        ok:
+          false,
 
         message:
           "Invalid promotion selection (items do not match cart).",
@@ -262,7 +274,8 @@ function validatePromotionPayload(
     expectedSelectionCount
   ) {
     return {
-      ok: false,
+      ok:
+        false,
 
       message:
         "Invalid promotion selection (wrong number of items).",
@@ -276,13 +289,14 @@ function validatePromotionPayload(
 }
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * GRAPHQL REQUEST
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 async function graphqlRequest(
-  query: string,
+  query:
+    string,
 
   variables:
     any =
@@ -316,16 +330,16 @@ async function graphqlRequest(
         headers,
 
         body:
-          JSON.stringify(
-            {
-              query,
-
-              variables,
-            }
-          ),
+          JSON.stringify({
+            query,
+            variables,
+          }),
 
         credentials:
           "include",
+
+        cache:
+          "no-store",
       }
     );
 
@@ -347,9 +361,9 @@ async function graphqlRequest(
 }
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * PARSE WOOCOMMERCE AMOUNT
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 function parseWooCommerceAmount(
@@ -388,20 +402,32 @@ function parseWooCommerceAmount(
 }
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * MANUAL COUPON
- * ---------------------------------------------------------
+ * =========================================================
  *
- * Apply coupon and return
- * discountAmount for CheckoutForm.
+ * This creates a temporary WooCommerce cart:
+ *
+ * 1. Empty cart
+ * 2. Add frontend products
+ * 3. Apply coupon
+ * 4. Get actual WooCommerce discount
+ * 5. Return discount to checkout page
  */
 
 async function handleManualCoupon(
   couponCode:
-    string
+    string,
+
+  cartItems:
+    SimpleCartItem[]
 ) {
   const cleanCode =
     couponCode.trim();
+
+  /*
+   * VALIDATE CODE
+   */
 
   if (
     !cleanCode
@@ -422,7 +448,187 @@ async function handleManualCoupon(
   }
 
   /*
+   * VALIDATE CART
+   */
+
+  if (
+    !Array.isArray(
+      cartItems
+    ) ||
+    cartItems.length ===
+      0
+  ) {
+    return NextResponse.json(
+      {
+        success:
+          false,
+
+        error:
+          "Your cart is empty.",
+      },
+      {
+        status:
+          400,
+      }
+    );
+  }
+
+  let sessionToken:
+    | string
+    | undefined;
+
+  /*
+   * ---------------------------------------------------------
+   * STEP 1
+   *
+   * EMPTY CART
+   * ---------------------------------------------------------
+   */
+
+  const emptyResult =
+    await graphqlRequest(
+      EMPTY_CART_MUTATION,
+      {},
+      sessionToken
+    );
+
+  if (
+    emptyResult
+      .sessionToken
+  ) {
+    sessionToken =
+      emptyResult
+        .sessionToken;
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * STEP 2
+   *
+   * ADD ACTUAL FRONTEND PRODUCTS
+   * ---------------------------------------------------------
+   */
+
+  for (
+    const item of
+    cartItems
+  ) {
+    if (
+      !item.productId ||
+      item.productId <=
+        0 ||
+      !item.quantity ||
+      item.quantity <=
+        0
+    ) {
+      return NextResponse.json(
+        {
+          success:
+            false,
+
+          error:
+            "Invalid cart item.",
+        },
+        {
+          status:
+            400,
+        }
+      );
+    }
+
+    const addResult =
+      await graphqlRequest(
+        ADD_TO_CART_MUTATION,
+        {
+          productId:
+            item.productId,
+
+          quantity:
+            item.quantity,
+        },
+        sessionToken
+      );
+
+    if (
+      addResult
+        .sessionToken
+    ) {
+      sessionToken =
+        addResult
+          .sessionToken;
+    }
+
+    if (
+      addResult
+        .data
+        ?.errors
+    ) {
+      console.error(
+        "Coupon cart add error:",
+        addResult
+          .data
+          .errors
+      );
+
+      return NextResponse.json(
+        {
+          success:
+            false,
+
+          error:
+            "Unable to prepare cart for promo code.",
+        },
+        {
+          status:
+            400,
+          }
+      );
+    }
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * STEP 3
+   *
+   * GET CART BEFORE COUPON
+   * ---------------------------------------------------------
+   */
+
+  const beforeCouponResult =
+    await graphqlRequest(
+      CART_TOTALS_QUERY,
+      {},
+      sessionToken
+    );
+
+  if (
+    beforeCouponResult
+      .sessionToken
+  ) {
+    sessionToken =
+      beforeCouponResult
+        .sessionToken;
+  }
+
+  const cartBeforeCoupon =
+    beforeCouponResult
+      .data
+      ?.data
+      ?.cart ||
+    null;
+
+  const subtotal =
+    parseWooCommerceAmount(
+      cartBeforeCoupon
+        ?.subtotal
+    );
+
+  /*
+   * ---------------------------------------------------------
+   * STEP 4
+   *
    * APPLY COUPON
+   * ---------------------------------------------------------
    */
 
   const applyResult =
@@ -431,21 +637,34 @@ async function handleManualCoupon(
       {
         code:
           cleanCode,
-      }
+      },
+      sessionToken
     );
 
   if (
-    applyResult.data
-      .errors
+    applyResult
+      .sessionToken
+  ) {
+    sessionToken =
+      applyResult
+        .sessionToken;
+  }
+
+  if (
+    applyResult
+      .data
+      ?.errors
   ) {
     console.error(
       "Manual coupon errors:",
-      applyResult.data
+      applyResult
+        .data
         .errors
     );
 
     const message =
-      applyResult.data
+      applyResult
+        .data
         .errors
         .map(
           (
@@ -479,11 +698,16 @@ async function handleManualCoupon(
   }
 
   /*
+   * ---------------------------------------------------------
+   * STEP 5
+   *
    * VERIFY COUPON
+   * ---------------------------------------------------------
    */
 
   const appliedCoupons =
-    applyResult.data
+    applyResult
+      .data
       ?.data
       ?.applyCoupon
       ?.cart
@@ -525,30 +749,27 @@ async function handleManualCoupon(
   }
 
   /*
-   * FETCH UPDATED CART TOTALS
+   * ---------------------------------------------------------
+   * STEP 6
+   *
+   * GET UPDATED CART TOTALS
+   * ---------------------------------------------------------
    */
 
   const cartTotalsResult =
     await graphqlRequest(
       CART_TOTALS_QUERY,
       {},
-
-      applyResult
-        .sessionToken ??
-        undefined
+      sessionToken
     );
 
   if (
     cartTotalsResult
-      .data
-      .errors
+      .sessionToken
   ) {
-    console.error(
-      "Cart totals errors:",
+    sessionToken =
       cartTotalsResult
-        .data
-        .errors
-    );
+        .sessionToken;
   }
 
   const cart =
@@ -563,11 +784,11 @@ async function handleManualCoupon(
       ?.cart ||
     null;
 
-  const subtotal =
-    parseWooCommerceAmount(
-      cart
-        ?.subtotal
-    );
+  /*
+   * ---------------------------------------------------------
+   * ACTUAL WOO DISCOUNT
+   * ---------------------------------------------------------
+   */
 
   const discount =
     parseWooCommerceAmount(
@@ -583,14 +804,8 @@ async function handleManualCoupon(
 
   /*
    * ---------------------------------------------------------
-   * IMPORTANT FIX
+   * RETURN RESULT
    * ---------------------------------------------------------
-   *
-   * Frontend CheckoutForm expects:
-   *
-   * result.discountAmount
-   *
-   * Therefore we explicitly return it.
    */
 
   return NextResponse.json(
@@ -605,14 +820,14 @@ async function handleManualCoupon(
       message:
         "Promo code applied successfully.",
 
+      subtotal,
+
       /*
-       * THIS IS THE FIX
+       * CheckoutForm uses this value.
        */
 
       discountAmount:
         discount,
-
-      subtotal,
 
       discount,
 
@@ -631,9 +846,9 @@ async function handleManualCoupon(
 }
 
 /*
- * ---------------------------------------------------------
+ * =========================================================
  * POST API
- * ---------------------------------------------------------
+ * =========================================================
  */
 
 export async function POST(
@@ -650,28 +865,43 @@ export async function POST(
       "checkout";
 
     /*
-     * ---------------------------------------------------------
+     * =========================================================
      * APPLY MANUAL COUPON
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     if (
       action ===
       "apply-coupon"
     ) {
+      /*
+       * IMPORTANT:
+       *
+       * cartItems are now received
+       * from CheckoutForm.
+       */
+
       return await handleManualCoupon(
         String(
           body
             ?.couponCode ||
             ""
+        ),
+
+        Array.isArray(
+          body
+            ?.cartItems
         )
+          ? body
+              .cartItems
+          : []
       );
     }
 
     /*
-     * ---------------------------------------------------------
+     * =========================================================
      * NORMAL CHECKOUT
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     const {
@@ -688,13 +918,7 @@ export async function POST(
           any;
 
         cartItems:
-          Array<{
-            productId:
-              number;
-
-            quantity:
-              number;
-          }>;
+          SimpleCartItem[];
 
         promotion?:
           | PromotionPayload
@@ -733,17 +957,17 @@ export async function POST(
       | undefined;
 
     /*
-     * ---------------------------------------------------------
-     * STEP 1:
+     * =========================================================
+     * STEP 1
+     *
      * EMPTY CART
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     const emptyResult =
       await graphqlRequest(
         EMPTY_CART_MUTATION,
         {},
-
         sessionToken
       );
 
@@ -759,7 +983,7 @@ export async function POST(
     if (
       emptyResult
         .data
-        .errors
+        ?.errors
     ) {
       const isEmptyError =
         emptyResult
@@ -771,7 +995,7 @@ export async function POST(
                 any
             ) =>
               error
-                .message
+                ?.message
                 ?.toLowerCase()
                 .includes(
                   "cart is empty"
@@ -791,10 +1015,11 @@ export async function POST(
     }
 
     /*
-     * ---------------------------------------------------------
-     * STEP 2:
+     * =========================================================
+     * STEP 2
+     *
      * ADD PRODUCTS
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     for (
@@ -831,7 +1056,6 @@ export async function POST(
             quantity:
               item.quantity,
           },
-
           sessionToken
         );
 
@@ -847,7 +1071,7 @@ export async function POST(
       if (
         addResult
           .data
-          .errors
+          ?.errors
       ) {
         console.error(
           "Add to cart errors:",
@@ -875,10 +1099,11 @@ export async function POST(
     }
 
     /*
-     * ---------------------------------------------------------
-     * STEP 3A:
+     * =========================================================
+     * STEP 3A
+     *
      * GIFT SET PROMOTION
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     if (
@@ -887,7 +1112,6 @@ export async function POST(
       const validation =
         validatePromotionPayload(
           promotion,
-
           cartItems
         );
 
@@ -933,7 +1157,6 @@ export async function POST(
               code:
                 couponCode,
             },
-
             sessionToken
           );
 
@@ -949,7 +1172,7 @@ export async function POST(
         if (
           applyResult
             .data
-            .errors
+            ?.errors
         ) {
           console.error(
             "Promotion coupon errors:",
@@ -973,10 +1196,11 @@ export async function POST(
     }
 
     /*
-     * ---------------------------------------------------------
-     * STEP 3B:
+     * =========================================================
+     * STEP 3B
+     *
      * MANUAL PROMO CODE
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     if (
@@ -995,7 +1219,6 @@ export async function POST(
             code:
               cleanPromoCode,
           },
-
           sessionToken
         );
 
@@ -1011,7 +1234,7 @@ export async function POST(
       if (
         applyResult
           .data
-          .errors
+          ?.errors
       ) {
         console.error(
           "Manual promo coupon errors:",
@@ -1085,7 +1308,6 @@ export async function POST(
           {
             status:
               400,
-            }
           }
         );
       }
@@ -1100,10 +1322,11 @@ export async function POST(
     }
 
     /*
-     * ---------------------------------------------------------
-     * STEP 4:
+     * =========================================================
+     * STEP 4
+     *
      * CHECKOUT
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     const checkoutResult =
@@ -1131,14 +1354,13 @@ export async function POST(
               .customerNote ||
             null,
         },
-
         sessionToken
       );
 
     if (
       checkoutResult
         .data
-        .errors
+        ?.errors
     ) {
       console.error(
         "Checkout errors:",
@@ -1181,6 +1403,12 @@ export async function POST(
         }
       );
     }
+
+    /*
+     * =========================================================
+     * SUCCESS
+     * =========================================================
+     */
 
     return NextResponse.json(
       {
