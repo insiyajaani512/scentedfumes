@@ -1,25 +1,17 @@
 "use client";
 
-import {
-  useState,
-} from "react";
+import { useState } from "react";
 
-import {
-  useRouter,
-} from "next/navigation";
+import { useRouter } from "next/navigation";
 
-import {
-  useCartStore,
-} from "@/lib/store/cartStore";
+import { useCartStore } from "@/lib/store/cartStore";
 
 import {
   processCheckout,
   applyManualCoupon,
 } from "@/lib/graphql/checkout";
 
-import {
-  CheckoutInput,
-} from "@/types/checkout";
+import { CheckoutInput } from "@/types/checkout";
 
 import {
   extractNumericPrice,
@@ -27,158 +19,106 @@ import {
 } from "@/lib/utils";
 
 export default function CheckoutForm() {
-  const router =
-    useRouter();
+  const router = useRouter();
 
   const {
     items,
     clearCart,
     promotion,
-  } =
-    useCartStore();
+  } = useCartStore();
 
   const {
-    subtotal:
-      subtotalPrice,
+    subtotal: subtotalPrice,
 
-    discount:
-      promotionDiscount,
+    discount: promotionDiscount,
 
-    total:
-      discountedSubtotal,
-  } =
-    calculateDisplayTotals(
-      items,
-      promotion
-    );
+    total: discountedSubtotal,
+  } = calculateDisplayTotals(
+    items,
+    promotion
+  );
 
   const [
     isSubmitting,
     setIsSubmitting,
-  ] =
-    useState(false);
+  ] = useState(false);
 
   const [
     isApplyingPromo,
     setIsApplyingPromo,
-  ] =
-    useState(false);
+  ] = useState(false);
 
   const [
     promoCode,
     setPromoCode,
-  ] =
-    useState("");
+  ] = useState("");
 
   const [
     appliedPromoCode,
     setAppliedPromoCode,
-  ] =
-    useState<
-      string | null
-    >(null);
+  ] = useState<string | null>(null);
 
   const [
     promoMessage,
     setPromoMessage,
-  ] =
-    useState<
-      string | null
-    >(null);
+  ] = useState<string | null>(null);
 
   const [
     promoError,
     setPromoError,
-  ] =
-    useState<
-      string | null
-    >(null);
+  ] = useState<string | null>(null);
 
   /*
-   * ACTUAL PROMO DISCOUNT
+   * Actual manual promo discount.
    */
-
   const [
     promoDiscount,
     setPromoDiscount,
-  ] =
-    useState(0);
+  ] = useState(0);
 
   const [
     error,
     setError,
-  ] =
-    useState<
-      string | null
-    >(null);
+  ] = useState<string | null>(null);
 
   const [
     formData,
     setFormData,
-  ] =
-    useState({
-      firstName:
-        "",
+  ] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    address1: "",
+    city: "",
+    state: "",
+    postcode: "",
+    country: "PK",
+  });
 
-      lastName:
-        "",
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement
+    >
+  ) => {
+    const {
+      name,
+      value,
+    } = e.target;
 
-      email:
-        "",
-
-      phone:
-        "",
-
-      address1:
-        "",
-
-      city:
-        "",
-
-      state:
-        "",
-
-      postcode:
-        "",
-
-      country:
-        "PK",
-    });
-
-  const handleChange =
-    (
-      e: React.ChangeEvent<
-        | HTMLInputElement
-        | HTMLSelectElement
-      >
-    ) => {
-      const {
-        name,
-        value,
-      } =
-        e.target;
-
-      setFormData(
-        (
-          prev
-        ) => ({
-          ...prev,
-
-          [name]:
-            value,
-        })
-      );
-    };
+    setFormData(
+      (prev) => ({
+        ...prev,
+        [name]: value,
+      })
+    );
+  };
 
   const handleApplyPromo =
     async () => {
-      setPromoError(
-        null
-      );
+      setPromoError(null);
 
-      setPromoMessage(
-        null
-      );
+      setPromoMessage(null);
 
       const code =
         promoCode.trim();
@@ -191,9 +131,7 @@ export default function CheckoutForm() {
         return;
       }
 
-      setIsApplyingPromo(
-        true
-      );
+      setIsApplyingPromo(true);
 
       try {
         const result =
@@ -201,28 +139,43 @@ export default function CheckoutForm() {
             code
           );
 
-        if (
-          result.success
-        ) {
+        if (result.success) {
           setAppliedPromoCode(
             result.code ||
-            code.toUpperCase()
+              code.toUpperCase()
           );
 
           /*
-           * SAVE ACTUAL DISCOUNT
+           * IMPORTANT
+           *
+           * Support both:
+           *
+           * result.discountAmount
+           *
+           * and:
+           *
+           * result.discount
+           *
+           * because the API may return
+           * discount inside the totals response.
            */
+          const actualDiscount =
+            Number(
+              result.discountAmount ??
+                (result as any)
+                  .discount ??
+                result.totals
+                  ?.discount ??
+                0
+            );
 
           setPromoDiscount(
-            Number(
-              result.discountAmount ||
-              0
-            )
+            actualDiscount
           );
 
           setPromoMessage(
             result.message ||
-            "Promo code applied successfully."
+              "Promo code applied successfully."
           );
         } else {
           setAppliedPromoCode(
@@ -235,7 +188,7 @@ export default function CheckoutForm() {
 
           setPromoError(
             result.message ||
-            "Invalid promo code."
+              "Invalid promo code."
           );
         }
       } catch (
@@ -251,7 +204,7 @@ export default function CheckoutForm() {
 
         setPromoError(
           err?.message ||
-          "Unable to validate the promo code. Please try again."
+            "Unable to validate the promo code. Please try again."
         );
       } finally {
         setIsApplyingPromo(
@@ -335,12 +288,9 @@ export default function CheckoutForm() {
 
       const invalidItems =
         items.filter(
-          (
-            item
-          ) =>
+          (item) =>
             !item.databaseId ||
-            item.databaseId <=
-              0
+            item.databaseId <= 0
         );
 
       if (
@@ -362,18 +312,13 @@ export default function CheckoutForm() {
         const testerSelectionsNote =
           items
             .filter(
-              (
-                item
-              ) =>
+              (item) =>
                 item.testerSelections &&
                 item.testerSelections
-                  .length >
-                  0
+                  .length > 0
             )
             .map(
-              (
-                item
-              ) => {
+              (item) => {
                 const selections =
                   item.testerSelections
                     ?.map(
@@ -382,8 +327,7 @@ export default function CheckoutForm() {
                         index
                       ) =>
                         `Tester ${
-                          index +
-                          1
+                          index + 1
                         }: ${selection}`
                     )
                     .join(
@@ -399,26 +343,26 @@ export default function CheckoutForm() {
 
         const promotionNote =
           promotion
-            ? `Promotion: ${promotion.label} | Items: ${promotion.selections
-                .map(
-                  (
-                    id
-                  ) =>
-                    items.find(
-                      (
-                        it
-                      ) =>
-                        it.databaseId ===
+            ? `Promotion: ${
+                promotion.label
+              } | Items: ${
+                promotion.selections
+                  .map(
+                    (id) =>
+                      items.find(
+                        (it) =>
+                          it.databaseId ===
+                          id
+                      )
+                        ?.name ??
+                      String(
                         id
-                    )
-                      ?.name ??
-                    String(
-                      id
-                    )
-                )
-                .join(
-                  ", "
-                )}`
+                      )
+                  )
+                  .join(
+                    ", "
+                  )
+              }`
             : "";
 
         const promoNote =
@@ -513,9 +457,7 @@ export default function CheckoutForm() {
 
         const cartItems =
           items.map(
-            (
-              item
-            ) => ({
+            (item) => ({
               productId:
                 item.databaseId,
 
@@ -566,7 +508,7 @@ export default function CheckoutForm() {
 
         setError(
           err?.message ||
-          "An error occurred during checkout. Please try again."
+            "An error occurred during checkout. Please try again."
         );
       } finally {
         setIsSubmitting(
@@ -598,11 +540,9 @@ export default function CheckoutForm() {
   /*
    * TOTAL CALCULATION
    *
-   * First:
-   * Store promotion discount
-   *
-   * Then:
-   * Apply manual coupon discount
+   * Product subtotal
+   * minus promotion discount
+   * minus manual promo discount
    */
 
   const totalAfterPromo =
@@ -613,8 +553,8 @@ export default function CheckoutForm() {
     );
 
   /*
-   * Shipping calculated AFTER
-   * coupon discount.
+   * Shipping is calculated
+   * after all discounts.
    */
 
   const shippingFee =
@@ -628,8 +568,7 @@ export default function CheckoutForm() {
     shippingFee;
 
   if (
-    items.length ===
-    0
+    items.length === 0
   ) {
     return (
       <div className="rounded-2xl border border-[var(--accent-gold)]/15 bg-[var(--bg-main)]/60 p-8 text-center">
@@ -960,9 +899,7 @@ export default function CheckoutForm() {
               promoCode
             }
             onChange={
-              (
-                e
-              ) => {
+              (e) => {
                 setPromoCode(
                   e.target.value
                 );
@@ -1017,7 +954,8 @@ export default function CheckoutForm() {
 
         {promoMessage && (
           <p className="mt-3 text-[var(--accent-gold)]">
-            ✓ {
+            ✓{" "}
+            {
               promoMessage
             }
           </p>
@@ -1118,8 +1056,8 @@ export default function CheckoutForm() {
             fontWeight:
               600,
 
-            fontSize:
-              "1.8rem",
+              fontSize:
+                "1.8rem",
           }}
         >
           Review your order
@@ -1127,9 +1065,7 @@ export default function CheckoutForm() {
 
         <div className="flex flex-col gap-3">
           {items.map(
-            (
-              item
-            ) => (
+            (item) => (
               <div
                 key={`checkout-item-${
                   item.databaseId ||
@@ -1301,8 +1237,8 @@ type FieldProps = {
 
   onChange: (
     e: React.ChangeEvent<
-      | HTMLInputElement
-      | HTMLSelectElement
+      HTMLInputElement |
+      HTMLSelectElement
     >
   ) => void;
 
@@ -1329,8 +1265,7 @@ function Field({
 
   style,
 
-  type =
-    "text",
+  type = "text",
 }: FieldProps) {
   return (
     <div className="flex flex-col gap-2">
