@@ -29,9 +29,7 @@ export default function CheckoutForm() {
 
   const {
     subtotal: subtotalPrice,
-
     discount: promotionDiscount,
-
     total: discountedSubtotal,
   } = calculateDisplayTotals(
     items,
@@ -56,21 +54,28 @@ export default function CheckoutForm() {
   const [
     appliedPromoCode,
     setAppliedPromoCode,
-  ] = useState<string | null>(null);
+  ] = useState<
+    string | null
+  >(null);
 
   const [
     promoMessage,
     setPromoMessage,
-  ] = useState<string | null>(null);
+  ] = useState<
+    string | null
+  >(null);
 
   const [
     promoError,
     setPromoError,
-  ] = useState<string | null>(null);
+  ] = useState<
+    string | null
+  >(null);
 
   /*
-   * Actual manual promo discount.
+   * ACTUAL PROMO DISCOUNT
    */
+
   const [
     promoDiscount,
     setPromoDiscount,
@@ -79,7 +84,9 @@ export default function CheckoutForm() {
   const [
     error,
     setError,
-  ] = useState<string | null>(null);
+  ] = useState<
+    string | null
+  >(null);
 
   const [
     formData,
@@ -98,7 +105,8 @@ export default function CheckoutForm() {
 
   const handleChange = (
     e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement
+      | HTMLInputElement
+      | HTMLSelectElement
     >
   ) => {
     const {
@@ -113,6 +121,12 @@ export default function CheckoutForm() {
       })
     );
   };
+
+  /*
+   * =========================================================
+   * APPLY PROMO CODE
+   * =========================================================
+   */
 
   const handleApplyPromo =
     async () => {
@@ -131,43 +145,102 @@ export default function CheckoutForm() {
         return;
       }
 
-      setIsApplyingPromo(true);
+      if (
+        items.length === 0
+      ) {
+        setPromoError(
+          "Your cart is empty."
+        );
+
+        return;
+      }
+
+      /*
+       * IMPORTANT:
+       *
+       * This sends the ACTUAL frontend
+       * cart items to the API.
+       */
+
+      const cartItems =
+        items.map(
+          (item) => ({
+            productId:
+              item.databaseId,
+
+            quantity:
+              item.quantity,
+          })
+        );
+
+      /*
+       * Validate product IDs
+       */
+
+      const invalidItems =
+        cartItems.filter(
+          (item) =>
+            !item.productId ||
+            item.productId <= 0 ||
+            !item.quantity ||
+            item.quantity <= 0
+        );
+
+      if (
+        invalidItems.length > 0
+      ) {
+        setPromoError(
+          "Some cart items are invalid. Please refresh the page and try again."
+        );
+
+        return;
+      }
+
+      setIsApplyingPromo(
+        true
+      );
 
       try {
+        /*
+         * =====================================================
+         * API CALL FOR PROMO CODE
+         * =====================================================
+         *
+         * This is where the frontend calls:
+         *
+         * /api/checkout
+         *
+         * through applyManualCoupon().
+         *
+         * The actual fetch() is inside:
+         *
+         * src/lib/graphql/checkout.ts
+         */
+
         const result =
           await applyManualCoupon(
-            code
+            code,
+            cartItems
           );
 
-        if (result.success) {
-          setAppliedPromoCode(
-            result.code ||
-              code.toUpperCase()
-          );
-
-          /*
-           * IMPORTANT
-           *
-           * Support both:
-           *
-           * result.discountAmount
-           *
-           * and:
-           *
-           * result.discount
-           *
-           * because the API may return
-           * discount inside the totals response.
-           */
+        if (
+          result.success
+        ) {
           const actualDiscount =
             Number(
               result.discountAmount ??
-                (result as any)
-                  .discount ??
-                result.totals
-                  ?.discount ??
-                0
+              result.discount ??
+              0
             );
+
+          setAppliedPromoCode(
+            result.code ||
+            code.toUpperCase()
+          );
+
+          /*
+           * Save actual WooCommerce discount.
+           */
 
           setPromoDiscount(
             actualDiscount
@@ -175,7 +248,7 @@ export default function CheckoutForm() {
 
           setPromoMessage(
             result.message ||
-              "Promo code applied successfully."
+            "Promo code applied successfully."
           );
         } else {
           setAppliedPromoCode(
@@ -188,12 +261,17 @@ export default function CheckoutForm() {
 
           setPromoError(
             result.message ||
-              "Invalid promo code."
+            "Invalid promo code."
           );
         }
       } catch (
         err: any
       ) {
+        console.error(
+          "Promo application error:",
+          err
+        );
+
         setAppliedPromoCode(
           null
         );
@@ -204,7 +282,7 @@ export default function CheckoutForm() {
 
         setPromoError(
           err?.message ||
-            "Unable to validate the promo code. Please try again."
+          "Unable to validate the promo code. Please try again."
         );
       } finally {
         setIsApplyingPromo(
@@ -213,16 +291,19 @@ export default function CheckoutForm() {
       }
     };
 
+  /*
+   * =========================================================
+   * SUBMIT CHECKOUT
+   * =========================================================
+   */
+
   const handleSubmit =
     async (
-      e:
-        React.FormEvent
+      e: React.FormEvent
     ) => {
       e.preventDefault();
 
-      setError(
-        null
-      );
+      setError(null);
 
       if (
         items.length === 0
@@ -309,6 +390,10 @@ export default function CheckoutForm() {
       );
 
       try {
+        /*
+         * TESTER SELECTIONS
+         */
+
         const testerSelectionsNote =
           items
             .filter(
@@ -341,29 +426,28 @@ export default function CheckoutForm() {
               " || "
             );
 
+        /*
+         * GIFT SET PROMOTION
+         */
+
         const promotionNote =
           promotion
-            ? `Promotion: ${
-                promotion.label
-              } | Items: ${
-                promotion.selections
-                  .map(
-                    (id) =>
-                      items.find(
-                        (it) =>
-                          it.databaseId ===
-                          id
-                      )
-                        ?.name ??
-                      String(
-                        id
-                      )
-                  )
-                  .join(
-                    ", "
-                  )
-              }`
+            ? `Promotion: ${promotion.label} | Items: ${promotion.selections
+                .map(
+                  (id) =>
+                    items.find(
+                      (it) =>
+                        it.databaseId === id
+                    )
+                      ?.name ??
+                    String(id)
+                )
+                .join(", ")}`
             : "";
+
+        /*
+         * MANUAL PROMO CODE
+         */
 
         const promoNote =
           appliedPromoCode
@@ -372,17 +456,15 @@ export default function CheckoutForm() {
 
         const customerNote = [
           promotionNote,
-
           testerSelectionsNote,
-
           promoNote,
         ]
-          .filter(
-            Boolean
-          )
-          .join(
-            " || "
-          );
+          .filter(Boolean)
+          .join(" || ");
+
+        /*
+         * CHECKOUT INPUT
+         */
 
         const input:
           CheckoutInput = {
@@ -455,6 +537,10 @@ export default function CheckoutForm() {
             undefined,
         };
 
+        /*
+         * CART ITEMS
+         */
+
         const cartItems =
           items.map(
             (item) => ({
@@ -466,14 +552,15 @@ export default function CheckoutForm() {
             })
           );
 
+        /*
+         * PROCESS CHECKOUT
+         */
+
         const result =
           await processCheckout(
             input,
-
             cartItems,
-
             promotion,
-
             appliedPromoCode
           );
 
@@ -508,7 +595,7 @@ export default function CheckoutForm() {
 
         setError(
           err?.message ||
-            "An error occurred during checkout. Please try again."
+          "An error occurred during checkout. Please try again."
         );
       } finally {
         setIsSubmitting(
@@ -516,6 +603,10 @@ export default function CheckoutForm() {
         );
       }
     };
+
+  /*
+   * INPUT STYLING
+   */
 
   const inputClass =
     "w-full rounded-xl border border-[var(--accent-gold)]/20 bg-[var(--bg-main)]/70 text-[var(--text-secondary)] outline-none transition-all duration-200 focus:border-[var(--accent-gold)]/50 focus:shadow-[0_0_15px_rgba(253,221,173,0.15)]";
@@ -538,11 +629,9 @@ export default function CheckoutForm() {
   };
 
   /*
+   * =========================================================
    * TOTAL CALCULATION
-   *
-   * Product subtotal
-   * minus promotion discount
-   * minus manual promo discount
+   * =========================================================
    */
 
   const totalAfterPromo =
@@ -553,8 +642,7 @@ export default function CheckoutForm() {
     );
 
   /*
-   * Shipping is calculated
-   * after all discounts.
+   * Shipping after discount.
    */
 
   const shippingFee =
@@ -566,6 +654,10 @@ export default function CheckoutForm() {
   const finalTotal =
     totalAfterPromo +
     shippingFee;
+
+  /*
+   * EMPTY CART
+   */
 
   if (
     items.length === 0
@@ -581,6 +673,12 @@ export default function CheckoutForm() {
       </div>
     );
   }
+
+  /*
+   * =========================================================
+   * FORM
+   * =========================================================
+   */
 
   return (
     <form
@@ -954,18 +1052,13 @@ export default function CheckoutForm() {
 
         {promoMessage && (
           <p className="mt-3 text-[var(--accent-gold)]">
-            ✓{" "}
-            {
-              promoMessage
-            }
+            ✓ {promoMessage}
           </p>
         )}
 
         {promoError && (
           <p className="mt-3 text-red-400">
-            {
-              promoError
-            }
+            {promoError}
           </p>
         )}
 
@@ -975,9 +1068,7 @@ export default function CheckoutForm() {
               Applied code:{" "}
 
               <strong>
-                {
-                  appliedPromoCode
-                }
+                {appliedPromoCode}
               </strong>
             </p>
 
@@ -987,9 +1078,7 @@ export default function CheckoutForm() {
               <strong>
                 - Rs{" "}
 
-                {
-                  promoDiscount.toLocaleString()
-                }
+                {promoDiscount.toLocaleString()}
               </strong>
             </p>
           </div>
@@ -1056,8 +1145,8 @@ export default function CheckoutForm() {
             fontWeight:
               600,
 
-              fontSize:
-                "1.8rem",
+            fontSize:
+              "1.8rem",
           }}
         >
           Review your order
@@ -1075,9 +1164,7 @@ export default function CheckoutForm() {
               >
                 <div>
                   <p className="text-[var(--text-secondary)]">
-                    {
-                      item.name
-                    }
+                    {item.name}
                   </p>
 
                   <span
@@ -1088,9 +1175,7 @@ export default function CheckoutForm() {
                   >
                     Qty:{" "}
 
-                    {
-                      item.quantity
-                    }
+                    {item.quantity}
                   </span>
                 </div>
 
@@ -1158,9 +1243,7 @@ export default function CheckoutForm() {
               <div className="flex justify-between">
                 <span>
                   Promo (
-                  {
-                    appliedPromoCode
-                  }
+                  {appliedPromoCode}
                   )
                 </span>
 
@@ -1225,46 +1308,41 @@ export default function CheckoutForm() {
   );
 }
 
+/*
+ * =========================================================
+ * FIELD COMPONENT
+ * =========================================================
+ */
+
 type FieldProps = {
-  label:
-    string;
+  label: string;
 
-  name:
-    string;
+  name: string;
 
-  value:
-    string;
+  value: string;
 
   onChange: (
     e: React.ChangeEvent<
-      HTMLInputElement |
-      HTMLSelectElement
+      | HTMLInputElement
+      | HTMLSelectElement
     >
   ) => void;
 
-  className:
-    string;
+  className: string;
 
   style:
     React.CSSProperties;
 
-  type?:
-    string;
+  type?: string;
 };
 
 function Field({
   label,
-
   name,
-
   value,
-
   onChange,
-
   className,
-
   style,
-
   type = "text",
 }: FieldProps) {
   return (
@@ -1275,9 +1353,7 @@ function Field({
         }
         className="text-[var(--text-secondary)]"
       >
-        {
-          label
-        }
+        {label}
       </label>
 
       <input
