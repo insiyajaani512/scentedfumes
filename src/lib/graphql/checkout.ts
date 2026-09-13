@@ -7,12 +7,6 @@ import type {
   CartPromotion,
 } from "@/lib/store/cartStore";
 
-/*
- * ---------------------------------------------------------
- * MANUAL COUPON RESULT
- * ---------------------------------------------------------
- */
-
 export type ManualCouponResult = {
   success: boolean;
 
@@ -27,10 +21,6 @@ export type ManualCouponResult = {
   subtotal?: number;
 
   total?: number;
-
-  discountType?: string | null;
-
-  couponAmount?: number;
 };
 
 /*
@@ -40,20 +30,17 @@ export type ManualCouponResult = {
  *
  * IMPORTANT:
  *
- * We send the actual frontend cart items to the API.
+ * We send the ACTUAL CART ITEMS to the API.
  *
- * The API creates a temporary WooCommerce cart,
- * adds these items, applies the coupon,
- * and returns the REAL WooCommerce discount.
+ * The API rebuilds the WooCommerce cart first,
+ * then applies the coupon,
+ * then returns the REAL WooCommerce discount.
  */
 
 export async function applyManualCoupon(
   code: string,
 
-  cartItems: Array<{
-    productId: number;
-    quantity: number;
-  }>
+  cartItems: CartItem[]
 ): Promise<ManualCouponResult> {
   const cleanCode =
     code.trim();
@@ -61,6 +48,7 @@ export async function applyManualCoupon(
   if (!cleanCode) {
     return {
       success: false,
+
       message:
         "Please enter a promo code.",
     };
@@ -74,6 +62,7 @@ export async function applyManualCoupon(
   ) {
     return {
       success: false,
+
       message:
         "Your cart is empty.",
     };
@@ -87,21 +76,40 @@ export async function applyManualCoupon(
           method:
             "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+          headers:
+            {
+              "Content-Type":
+                "application/json",
+            },
 
           body:
-            JSON.stringify({
-              action:
-                "apply-coupon",
+            JSON.stringify(
+              {
+                action:
+                  "apply-coupon",
 
-              couponCode:
-                cleanCode,
+                couponCode:
+                  cleanCode,
 
-              cartItems,
-            }),
+                /*
+                 * Send actual cart items
+                 */
+
+                cartItems:
+                  cartItems.map(
+                    (
+                      item
+                    ) => ({
+                      productId:
+                        item.databaseId,
+
+                      quantity:
+                        item.quantity,
+                    })
+                  ),
+              }
+            ),
+          }
         }
       );
 
@@ -113,7 +121,8 @@ export async function applyManualCoupon(
       !result.success
     ) {
       return {
-        success: false,
+        success:
+          false,
 
         message:
           result.error ||
@@ -121,10 +130,6 @@ export async function applyManualCoupon(
           "Invalid promo code.",
       };
     }
-
-    /*
-     * WooCommerce returns the real discount.
-     */
 
     const actualDiscount =
       Number(
@@ -135,7 +140,8 @@ export async function applyManualCoupon(
       );
 
     return {
-      success: true,
+      success:
+        true,
 
       code:
         result.code ||
@@ -144,6 +150,10 @@ export async function applyManualCoupon(
       message:
         result.message ||
         "Promo code applied successfully.",
+
+      /*
+       * This value is used by Checkout.tsx
+       */
 
       discountAmount:
         actualDiscount,
@@ -164,16 +174,6 @@ export async function applyManualCoupon(
           result.totals?.total ??
           0
         ),
-
-      discountType:
-        result.discountType ||
-        null,
-
-      couponAmount:
-        Number(
-          result.couponAmount ||
-          0
-        ),
     };
   } catch (
     error: any
@@ -184,7 +184,8 @@ export async function applyManualCoupon(
     );
 
     return {
-      success: false,
+      success:
+        false,
 
       message:
         error?.message ||
@@ -200,9 +201,11 @@ export async function applyManualCoupon(
  */
 
 export async function processCheckout(
-  input: CheckoutInput,
+  input:
+    CheckoutInput,
 
-  cartItems: CartItem[],
+  cartItems:
+    CartItem[],
 
   promotion:
     | CartPromotion
@@ -222,27 +225,32 @@ export async function processCheckout(
           method:
             "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+          headers:
+            {
+              "Content-Type":
+                "application/json",
+            },
 
           body:
-            JSON.stringify({
-              action:
-                "checkout",
+            JSON.stringify(
+              {
+                action:
+                  "checkout",
 
-              checkoutInput:
-                input,
+                checkoutInput:
+                  input,
 
-              cartItems,
+                cartItems,
 
-              promotion,
+                promotion,
 
-              promoCode:
-                promoCode?.trim() ||
-                null,
-            }),
+                promoCode:
+                  promoCode
+                    ?.trim() ||
+                  null,
+              }
+            ),
+          }
         }
       );
 
